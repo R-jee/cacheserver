@@ -1,0 +1,10 @@
+; $Id:
+name = "Cache Server"
+description = "Allows to choose cache engines and settings per bin."
+package = "Cache"
+core = 7.x
+files[] = cacheserver.install
+files[] = cacheserver.module
+files[] = cacheserver.admin.inc
+configure = admin/config/development/performance/cacheserver
+version = 7.x

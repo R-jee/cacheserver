@@ -1,0 +1,243 @@
+<?php
+// $Id$
+
+/**
+ * Define some constants
+ */
+define('CACHESERVER_OPTIONS_NONE', -1);
+define('CACHESERVER_OPTIONS_UNIQUE', 0);
+define('CACHESERVER_OPTIONS_MULTIPLE', 1);
+
+/**
+ * @file
+ * Functions for the Cache Server module.
+ */
+
+/**
+ * Implements hook_permission().
+ */
+function cacheserver_permission() {
+  $permission = array();
+  $permission['administer cacheserver'] = array(
+    'title' => t('Administer Cache Server'),
+    'description' => t('Manage Cache Server configuration.'),
+  );
+  return $permission;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function cacheserver_menu() {
+  $items = array();
+  $items['admin/config/development/performance/default'] = array(
+    'title' => 'Performance',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+  $items['admin/config/development/performance/cacheserver'] = array(
+    'title' => 'Cache Server',
+    'description' => 'Manage cache engines and options for this website.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cacheserver_admin_settings'),
+    'access callback' => 'user_access',
+    'access arguments' => array('administer cacheserver'),
+    'file' => 'cacheserver.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 1,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_disable().
+ */
+function cacheserver_disable() {
+  variable_del('cacheserver_bins');
+}
+
+/**
+ * Implements hook_modules_disabled().
+ */
+function cacheserver_modules_disabled($modules) {
+  $flush_modules = array_intersect($modules, module_implements('flush_caches'));
+
+  if (count($flush_modules)) {
+    variable_del('cacheserver_bins');
+  }
+
+  $settings = variable_get('cacheserver_settings');
+
+  foreach ($flush_modules as $flush_module) {
+    $caches = module_invoke($flush_module, 'flush_caches');
+    foreach ($caches as $cache) {
+      unset($settings[$cache]);
+    }
+  }
+
+  $class_modules = array_intersect($modules, module_implements('cachemanager'));
+  foreach ($class_modules as $class_module) {
+    $classes = module_invoke($class_module, 'cachemanager');
+    foreach ($classes as $class) {
+      foreach ($settings as $bin => $setting) {
+        if ($settings[$bin]['class'] == $class) {
+          unset($settings[$bin]['class']);
+        }
+      }
+    }
+  }
+
+  variable_set('cacheserver_settings', $settings);
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function cacheserver_modules_enabled($modules) {
+  if (count(array_intersect($modules, module_implements('flush_caches')))) {
+    variable_del('cacheserver_bins');
+  }
+}
+
+/**
+ * Get available bins
+ */
+function _cacheserver_bins() {
+  $bins = variable_get('cacheserver_bins', NULL);
+  if (empty($bins)) {
+    $bins = array_merge(module_invoke_all('flush_caches'), array('cache', 'cache_bootstrap', 'cache_filter', 'cache_page'));
+    sort($bins);
+    variable_set('cacheserver_bins', $bins);
+  }
+  return $bins;
+}
+
+/**
+ * Get available cache servers
+ */
+function _cacheserver_cacheservers() {
+  $cacheservers = module_invoke_all('cacheserver');
+  foreach ($cacheservers as $class => $cacheserver) {
+    if (isset($cacheservers[$class]['#class']) == FALSE) {
+      $cacheservers[$class]['#class'] = $class;
+    }
+    if (isset($cacheservers[$class]['#name']) == FALSE) {
+      $cacheservers[$class]['#name'] = $class;
+    }
+    if (isset($cacheservers[$class]['#enabled']) == FALSE) {
+      $cacheservers[$class]['#enabled'] = TRUE;
+    }
+    if (isset($cacheservers[$class]['#options']) == FALSE) {
+      $cacheservers[$class]['#options'] = array();
+    }
+    if (isset($cacheservers[$class]['#options']) == FALSE) {
+      $cacheservers[$class]['#options'] = array();
+    }
+    if (isset($cacheservers[$class]['#options default']) == FALSE) {
+      $cacheservers[$class]['#options default'] = array();
+    }
+    if (isset($cacheservers[$class]['#options type']) == FALSE) {
+      $cacheservers[$class]['#options type'] = CACHESERVER_OPTIONS_NONE;
+    }
+    if ($cacheservers[$class]['#options type'] == CACHESERVER_OPTIONS_UNIQUE) {
+      $cacheservers[$class]['#options default'] = array_slice($cacheservers[$class]['#options default'], 0, 1);
+    }
+  }
+
+  $result = array();
+  foreach ($cacheservers as $class => $cacheserver) {
+    if (class_exists($cacheservers[$class]['#class']) == TRUE || TRUE) {
+      $result[$class] = $cacheserver;
+    }
+  }
+
+  return $result;
+}
+
+/**
+ * Get formatted cache servers
+ */
+function _cacheserver_cacheservers_classes() {
+  $cacheservers = _cacheserver_cacheservers();
+  $classes = array();
+  foreach ($cacheservers as $class => $cacheserver) {
+    $classes[$class] = $cacheservers[$class]['#name'];
+  }
+  asort($classes);
+  return $classes;
+}
+
+/**
+ * Get formatted cache options
+ */
+function _cacheserver_cacheservers_options() {
+  $cacheservers = _cacheserver_cacheservers();
+  $options = array();
+  foreach ($cacheservers as $class => $cacheserver) {
+    if (count($cacheservers[$class]['#options']) > 1 && $cacheservers[$class]['#options type'] != CACHESERVER_OPTIONS_NONE) {
+      $class_options = $cacheservers[$class]['#options'];
+      if ($cacheservers[$class]['#options type'] == CACHESERVER_OPTIONS_UNIQUE) {
+        $type = 'radios';
+      }
+      elseif ($cacheservers[$class]['#options type'] == CACHESERVER_OPTIONS_MULTIPLE) {
+        $type = 'checkboxes';
+      }
+      asort($class_options);
+      $options[$class] = $class_options;
+      $options[$class] = array(
+        'type' => $type,
+        'options' => $class_options,
+      );
+    }
+  }
+  asort($options);
+  return $options;
+}
+
+/**
+ * Implements hook_cacheserver().
+ */
+function cacheserver_cacheserver() {
+  $cacheserver = array();
+  $cacheserver['DrupalDatabaseCache'] = array(
+    '#class' => 'DrupalDatabaseCache',
+    '#name' => t('<Drupal default database cache>'),
+    '#enabled' => TRUE,
+    '#options' => array(
+      'd1' => 'tdrupal1',
+      'd2' => 'tdrupal2',
+    ),
+    '#options type' => CACHESERVER_OPTIONS_NONE,
+  );
+  return $cacheserver;
+}
+
+/**
+ * Returns options select by user for a specific bin and a specific class
+ */
+function cacheserver_options($class, $bin = 'cache') {
+  return variable_get('cacheserver_options_' . $class . '_' . $bin, array());
+}
+
+/**
+ * Submit function for cacheserver_admin_settings form
+ */
+function cacheserver_admin_settings_submit($form, &$form_state) {
+  form_state_values_clean($form_state);
+  $values   = $form_state['values'];
+  $settings = variable_get('cacheserver_settings');
+  $bins     = _cacheserver_bins();
+  foreach ($bins as $bin) {
+    $settings[$bin]['class'] = $values[$bin . '_class'];
+    variable_set('cache_class_' . $bin, $settings[$bin]['class']);
+    $settings[$bin]['options'] = array_filter($values['options_' . $bin . '_' . $settings[$bin]['class']]);
+  }
+  variable_set('cacheserver_settings', $settings);
+}
+
+/**
+ * Submit function for cacheserver_admin_settings form reset button
+ */
+function cacheserver_admin_settings_reset_submit($form, &$form_state) {
+  variable_del('cacheserver_settings');
+  drupal_set_message(t('The configuration options have been reset to their default values.'));
+}

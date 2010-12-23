@@ -1,0 +1,19 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Install and uninstall functions for Cache Server module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function cacheserver_uninstall() {
+  $variables = array(
+    'cacheserver_bins',
+    'cacheserver_settings',
+  );
+  array_map('variable_del', $variables);
+}
+
