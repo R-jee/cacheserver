@@ -202,17 +202,14 @@ function cacheserver_cacheserver() {
     '#class' => 'DrupalDatabaseCache',
     '#name' => t('<Drupal default database cache>'),
     '#enabled' => TRUE,
-    '#options' => array(
-      'd1' => 'tdrupal1',
-      'd2' => 'tdrupal2',
-    ),
+    '#options' => array(),
     '#options type' => CACHESERVER_OPTIONS_NONE,
   );
   return $cacheserver;
 }
 
 /**
- * Returns options select by user for a specific bin and a specific class
+ * Returns options selected by user for a specific bin and a specific class
  */
 function cacheserver_options($class, $bin = 'cache') {
   return variable_get('cacheserver_options_' . $class . '_' . $bin, array());
